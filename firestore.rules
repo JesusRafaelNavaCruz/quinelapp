@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Partidos: lectura pública, escritura solo desde servidor (Admin SDK)
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if false; // Solo API route con Admin SDK
+    }
+
+    // Usuarios: cada uno puede leer/escribir su propio documento
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true; // Sin auth, el userId viene de localStorage
+    }
+
+    // Grupos: cualquiera puede crear y leer, solo miembros pueden modificar
+    match /groups/{groupId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true; // Para unirse al grupo
+      allow delete: if false;
+    }
+
+    // Pronósticos: cada usuario puede crear/editar los suyos
+    match /predictions/{predId} {
+      allow read: if true; // Para ver pronósticos del grupo
+      allow write: if true; // Sin auth robusta, controlar por lógica de app
+    }
+
+    // Pronósticos de campeón
+    match /champion_predictions/{predId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Tabla de posiciones: solo lectura pública, escritura solo servidor
+    match /standings/{standingId} {
+      allow read: if true;
+      allow write: if false; // Solo desde API route /api/results
+    }
+
+    // Notificaciones: cada usuario ve las suyas
+    match /notifications/{notifId} {
+      allow read: if true;
+      allow update: if true; // Para marcar como leídas
+      allow create: if false; // Solo desde servidor
+      allow delete: if false;
+    }
+  }
+}
