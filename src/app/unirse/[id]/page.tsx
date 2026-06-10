@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { getOrCreateUser } from "@/lib/user";
+import { useAuth } from "@/lib/AuthContext";
 import { joinGroup, getGroup } from "@/lib/db";
 import type { Group } from "@/types";
 
@@ -9,21 +9,27 @@ export default function UnirsePage() {
   const router = useRouter();
   const params = useParams();
   const groupId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [group, setGroup] = useState<Group | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace(`/login?redirect=/unirse/${groupId}`);
+      return;
+    }
+
     async function join() {
-      const u = getOrCreateUser();
       const g = await getGroup(groupId);
       if (!g) { setStatus("error"); return; }
       setGroup(g);
-      await joinGroup(groupId, u.id);
+      await joinGroup(groupId, user!.id);
       setStatus("success");
       setTimeout(() => router.push(`/pronosticos?grupo=${groupId}`), 1500);
     }
     join();
-  }, [groupId]);
+  }, [user, authLoading, groupId]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

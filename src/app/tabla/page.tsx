@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getOrCreateUser } from "@/lib/user";
+import { useAuth } from "@/lib/AuthContext";
 import { subscribeStandings, getUserGroups } from "@/lib/db";
 import type { Standing, Group, User } from "@/types";
 import { ChevronLeft, Trophy, Medal, ChevronDown } from "lucide-react";
@@ -13,12 +13,12 @@ function RankIcon({ rank }: { rank: number }) {
   return <span className="text-pitch-500 text-sm w-4 text-center">{rank}</span>;
 }
 
-export default function TablaPage() {
+function TablaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const groupIdParam = searchParams.get("grupo");
 
-  const [user, setUser] = useState<User | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [standings, setStandings] = useState<Standing[]>([]);
@@ -26,14 +26,13 @@ export default function TablaPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const u = getOrCreateUser();
-    if (!u.name) { router.push("/"); return; }
-    setUser(u);
-    getUserGroups(u.id).then((g) => {
+    if (!authLoading && !user) { router.replace("/login"); return; }
+    if (!user) return;
+    getUserGroups(user.id).then((g) => {
       setGroups(g);
       setSelectedGroupId(groupIdParam ?? g[0]?.id ?? "");
     });
-  }, []);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (!selectedGroupId) return;
@@ -45,7 +44,15 @@ export default function TablaPage() {
     return unsub;
   }, [selectedGroupId]);
 
-  const myStanding = standings.find((s) => s.userId === user?.id);
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-pitch-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const myStanding = standings.find((s) => s.userId === user.id);
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto">
@@ -143,7 +150,7 @@ export default function TablaPage() {
             <div
               key={s.userId}
               className={`flex items-center gap-3 px-4 py-4 border-b border-pitch-800/40 last:border-0 transition-colors ${
-                s.userId === user?.id ? "bg-pitch-500/10" : "hover:bg-pitch-800/30"
+                s.userId === user.id ? "bg-pitch-500/10" : "hover:bg-pitch-800/30"
               }`}
               style={{ animationDelay: `${i * 0.05}s` }}
             >
@@ -151,9 +158,9 @@ export default function TablaPage() {
                 <RankIcon rank={s.rank ?? i + 1} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`font-medium truncate ${s.userId === user?.id ? "text-pitch-300" : "text-white"}`}>
+                <p className={`font-medium truncate ${s.userId === user.id ? "text-pitch-300" : "text-white"}`}>
                   {s.userName}
-                  {s.userId === user?.id && <span className="text-pitch-500 text-xs ml-1">(tú)</span>}
+                  {s.userId === user.id && <span className="text-pitch-500 text-xs ml-1">(tú)</span>}
                 </p>
                 <p className="text-pitch-500 text-xs">{s.correctWinners} ganadores</p>
               </div>
@@ -187,5 +194,13 @@ export default function TablaPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TablaPage() {
+  return (
+    <Suspense>
+      <TablaPageContent />
+    </Suspense>
   );
 }

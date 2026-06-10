@@ -1,15 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getOrCreateUser } from "@/lib/user";
+import { useAuth } from "@/lib/AuthContext";
 import { createGroup, getUserGroups, joinGroup } from "@/lib/db";
-import type { Group, User } from "@/types";
+import type { Group } from "@/types";
 import { nanoid } from "nanoid";
-import { Plus, Link2, LogIn, Users, Copy, Check, ChevronLeft, Crown } from "lucide-react";
+import { Plus, Link2, LogIn, Users, Check, ChevronLeft, Crown } from "lucide-react";
 
 export default function GruposPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"list" | "create" | "join">("list");
@@ -20,11 +20,9 @@ export default function GruposPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const u = getOrCreateUser();
-    if (!u.name) { router.push("/"); return; }
-    setUser(u);
-    loadGroups(u.id);
-  }, []);
+    if (!authLoading && !user) { router.replace("/login"); return; }
+    if (user) loadGroups(user.id);
+  }, [user, authLoading]);
 
   async function loadGroups(userId: string) {
     setLoading(true);
@@ -74,6 +72,14 @@ export default function GruposPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-pitch-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto">
       {/* Header */}
@@ -83,7 +89,7 @@ export default function GruposPage() {
         </button>
         <div>
           <h1 className="font-display text-3xl text-white tracking-wide">MIS GRUPOS</h1>
-          <p className="text-pitch-400 text-sm">Quinielas en las que participas</p>
+          <p className="text-pitch-400 text-sm">Tus grupos en Cancha 26</p>
         </div>
       </div>
 
@@ -195,7 +201,7 @@ export default function GruposPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-white font-medium">{g.name}</h3>
-                    {g.adminId === user?.id && (
+                    {g.adminId === user.id && (
                       <Crown size={14} className="text-gold-400" />
                     )}
                   </div>

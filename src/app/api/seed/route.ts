@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { WORLD_CUP_2026_MATCHES } from "@/lib/matches-data";
 
 // GET /api/seed — poblar Firestore con los partidos del mundial
@@ -10,16 +10,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const batch = adminDb.batch();
-  for (const match of WORLD_CUP_2026_MATCHES) {
-    const ref = adminDb.collection("matches").doc(match.id);
-    batch.set(ref, match, { merge: true });
-  }
-  await batch.commit();
+  try {
+    const db = getAdminDb();
+    const batch = db.batch();
+    for (const match of WORLD_CUP_2026_MATCHES) {
+      const ref = db.collection("matches").doc(match.id);
+      batch.set(ref, match, { merge: true });
+    }
+    await batch.commit();
 
-  return NextResponse.json({
-    ok: true,
-    seeded: WORLD_CUP_2026_MATCHES.length,
-    message: `${WORLD_CUP_2026_MATCHES.length} partidos guardados en Firestore.`,
-  });
+    return NextResponse.json({
+      ok: true,
+      seeded: WORLD_CUP_2026_MATCHES.length,
+      message: `${WORLD_CUP_2026_MATCHES.length} partidos guardados en Firestore.`,
+    });
+  } catch (err) {
+    console.error("Error en /api/seed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

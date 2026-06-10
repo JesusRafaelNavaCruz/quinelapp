@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminMessaging } from "@/lib/firebase-admin";
 import { calculatePoints } from "@/lib/db";
 import type { Prediction, Standing, Match } from "@/types";
 
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Actualizar el partido
-    const matchRef = adminDb.collection("matches").doc(matchId);
+    const matchRef = getAdminDb().collection("matches").doc(matchId);
     const matchSnap = await matchRef.get();
     if (!matchSnap.exists) {
       return NextResponse.json({ error: "Partido no encontrado" }, { status: 404 });
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const match = matchSnap.data() as Match;
 
     // 2. Obtener todos los pronósticos para este partido
-    const predsSnap = await adminDb
+    const predsSnap = await getAdminDb()
       .collection("predictions")
       .where("matchId", "==", matchId)
       .get();
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Calcular y actualizar puntos con un batch
-    const batch = adminDb.batch();
+    const batch = getAdminDb().batch();
     let updatedCount = 0;
 
     // Agrupar por grupo para actualizar standings
@@ -63,11 +63,11 @@ export async function POST(req: NextRequest) {
 
     // 4. Actualizar standings (tabla de posiciones)
     for (const { userId, groupId, points, exact } of Object.values(pointsByUserGroup)) {
-      const standingRef = adminDb.collection("standings").doc(`${userId}_${groupId}`);
+      const standingRef = getAdminDb().collection("standings").doc(`${userId}_${groupId}`);
       const standingSnap = await standingRef.get();
 
       // Obtener nombre del usuario
-      const userSnap = await adminDb.collection("users").doc(userId).get();
+      const userSnap = await getAdminDb().collection("users").doc(userId).get();
       const userName = userSnap.exists ? (userSnap.data()?.name ?? "Desconocido") : "Desconocido";
 
       if (standingSnap.exists) {
@@ -94,18 +94,18 @@ export async function POST(req: NextRequest) {
     const groupIds = [...new Set(Object.values(pointsByUserGroup).map((v) => v.groupId))];
 
     for (const groupId of groupIds) {
-      const groupSnap = await adminDb.collection("groups").doc(groupId).get();
+      const groupSnap = await getAdminDb().collection("groups").doc(groupId).get();
       if (!groupSnap.exists) continue;
       const members: string[] = groupSnap.data()?.members ?? [];
 
       const tokens: string[] = [];
       for (const memberId of members) {
-        const uSnap = await adminDb.collection("users").doc(memberId).get();
+        const uSnap = await getAdminDb().collection("users").doc(memberId).get();
         const token = uSnap.data()?.fcmToken;
         if (token) tokens.push(token);
 
         // Guardar notificación en Firestore
-        const notifRef = adminDb.collection("notifications").doc();
+        const notifRef = getAdminDb().collection("notifications").doc();
         await notifRef.set({
           id: notifRef.id,
           userId: memberId,
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       // Enviar FCM si hay tokens
       if (tokens.length > 0) {
         try {
-          await adminMessaging.sendEachForMulticast({
+          await getAdminMessaging().sendEachForMulticast({
             tokens,
             notification: {
               title: "Resultado actualizado ⚽",

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, DM_Sans } from "next/font/google";
 import "./globals.css";
+import { Providers } from "@/components/Providers";
 
 const display = Bebas_Neue({
   weight: "400",
@@ -14,8 +15,8 @@ const body = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Quiñelapp | Mundialista",
-  description: "Pronostica, compite y gana en el Mundial FIFA 2026",
+  title: "Cancha 26 | Mundial 2026",
+  description: "Pronostica los partidos del Mundial 2026 y compite con tus amigos.",
   manifest: "/manifest.json",
   themeColor: "#052e16",
   icons: {
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${display.variable} ${body.variable}`}>
       <body className="bg-pitch-950 text-white font-body min-h-screen antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

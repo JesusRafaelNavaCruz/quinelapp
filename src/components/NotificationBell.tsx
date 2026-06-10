@@ -2,22 +2,22 @@
 import { useState, useEffect } from "react";
 import { Bell, BellRing, X } from "lucide-react";
 import { subscribeNotifications, markNotificationRead } from "@/lib/db";
-import { getUserId } from "@/lib/user";
+import { useAuth } from "@/lib/AuthContext";
 import { useNotifications } from "@/lib/useNotifications";
 import type { Notification } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
 export function NotificationBell() {
+  const { user } = useAuth();
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
-  const { permission, requestPermission, loading } = useNotifications();
+  const { permission, requestPermission, loading } = useNotifications(user?.id);
 
   useEffect(() => {
-    const userId = getUserId();
-    if (!userId) return;
-    return subscribeNotifications(userId, setNotifs);
-  }, []);
+    if (!user?.id) return;
+    return subscribeNotifications(user.id, setNotifs);
+  }, [user?.id]);
 
   const unread = notifs.filter((n) => !n.read).length;
 

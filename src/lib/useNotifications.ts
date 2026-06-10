@@ -2,9 +2,8 @@
 import { useEffect, useState } from "react";
 import { getToken } from "firebase/messaging";
 import { getMessagingInstance } from "@/lib/firebase";
-import { getUserId, updateUserToken } from "@/lib/user";
 
-export function useNotifications() {
+export function useNotifications(userId: string | null | undefined) {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +16,7 @@ export function useNotifications() {
   }, []);
 
   async function requestPermission() {
-    if (!("Notification" in window)) return;
+    if (!("Notification" in window) || !userId) return;
     setLoading(true);
     try {
       const result = await Notification.requestPermission();
@@ -35,15 +34,11 @@ export function useNotifications() {
         });
 
         if (token) {
-          updateUserToken(token);
-          const userId = getUserId();
-          if (userId) {
-            await fetch("/api/notifications", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId, token }),
-            });
-          }
+          await fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, token }),
+          });
         }
       }
     } catch (err) {

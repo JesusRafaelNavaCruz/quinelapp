@@ -1,6 +1,6 @@
 # Quiniela Mundial 2026
 
-App web para gestionar una quiniela del Mundial FIFA 2026 (México · USA · Canadá). Permite crear grupos privados, pronosticar resultados partido a partido, competir en una tabla de posiciones en tiempo real y recibir notificaciones push cuando se actualizan resultados.
+App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá). Permite crear grupos privados, pronosticar resultados partido a partido, competir en una tabla de posiciones en tiempo real y recibir notificaciones push cuando se actualizan resultados.
 
 ---
 

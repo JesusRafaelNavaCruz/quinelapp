@@ -1,9 +1,10 @@
 // ─── Usuarios ────────────────────────────────────────────────────────────────
 export interface User {
-  id: string;          // nanoid almacenado en localStorage
+  id: string;
   name: string;
-  avatar?: string;     // emoji o inicial
-  fcmToken?: string;   // para push notifications
+  email: string;
+  avatar?: string;
+  fcmToken?: string;
   createdAt: number;
 }
 

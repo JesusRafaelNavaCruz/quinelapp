@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getOrCreateUser } from "@/lib/user";
+import { useAuth } from "@/lib/AuthContext";
 import {
   getMatches,
   subscribePredictions,
@@ -185,12 +185,12 @@ function MatchCard({
   );
 }
 
-export default function PronosticosPage() {
+function PronosticosPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const groupIdParam = searchParams.get("grupo");
 
-  const [user, setUser] = useState<User | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [matches, setMatches] = useState<Match[]>([]);
@@ -201,21 +201,19 @@ export default function PronosticosPage() {
   const [showGroupSelect, setShowGroupSelect] = useState(false);
 
   useEffect(() => {
-    const u = getOrCreateUser();
-    if (!u.name) { router.push("/"); return; }
-    setUser(u);
+    if (!authLoading && !user) { router.replace("/login"); return; }
+    if (!user) return;
 
-    // Carga grupos y partidos en paralelo (evita el waterfall de 2 round trips)
-    Promise.all([getUserGroups(u.id), getMatches()]).then(([g, m]) => {
+    Promise.all([getUserGroups(user.id), getMatches()]).then(([g, m]) => {
       setGroups(g);
       setMatches(m);
       const gid = groupIdParam || g[0]?.id || "";
       setSelectedGroupId(gid);
     });
-  }, []);
+  }, [user, authLoading]);
 
   useEffect(() => {
-    if (!selectedGroupId || !user) return;
+    if (!selectedGroupId || !user || authLoading) return;
 
     const unsub = subscribePredictions(user.id, selectedGroupId, setPredictions);
 
@@ -257,6 +255,14 @@ export default function PronosticosPage() {
     };
     await saveChampionPrediction(pred);
     setChampion(pred);
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-pitch-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   const phases = [...new Set(matches.map((m) => m.phase))];
@@ -392,5 +398,13 @@ export default function PronosticosPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function PronosticosPage() {
+  return (
+    <Suspense>
+      <PronosticosPageContent />
+    </Suspense>
   );
 }
