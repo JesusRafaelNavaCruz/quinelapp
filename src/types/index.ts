@@ -18,7 +18,7 @@ export interface Group {
 }
 
 // ─── Partidos ────────────────────────────────────────────────────────────────
-export type Phase = "grupos" | "octavos" | "cuartos" | "semis" | "tercer" | "final";
+export type Phase = "grupos" | "ronda32" | "octavos" | "cuartos" | "semis" | "tercer" | "final";
 
 export interface Match {
   id: string;

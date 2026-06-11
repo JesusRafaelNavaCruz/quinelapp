@@ -43,7 +43,10 @@ function LoginPageContent() {
       case "auth/too-many-requests":
         return "Demasiados intentos. Espera unos minutos.";
       case "auth/popup-closed-by-user":
+      case "auth/cancelled-popup-request":
         return "";
+      case "auth/unauthorized-domain":
+        return "Este dominio no está autorizado en Firebase. Revisa la configuración de Authentication.";
       default:
         return "Algo salió mal. Intenta de nuevo.";
     }

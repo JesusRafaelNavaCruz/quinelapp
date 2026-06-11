@@ -18,6 +18,7 @@ import { WORLD_CUP_TEAMS } from "@/lib/matches-data";
 
 const PHASE_LABELS: Record<string, string> = {
   grupos: "Fase de grupos",
+  ronda32: "Ronda de 32",
   octavos: "Octavos de final",
   cuartos: "Cuartos de final",
   semis: "Semifinales",
