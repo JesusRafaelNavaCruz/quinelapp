@@ -36,7 +36,7 @@ export function NotificationBell() {
     <div className="relative">
       <button
         onClick={handleOpen}
-        className="relative p-2 rounded-xl bg-pitch-800/60 hover:bg-pitch-700/60 transition-colors"
+        className="relative p-2 rounded-xl bg-pitch-800 hover:bg-pitch-700/60 transition-colors"
       >
         {unread > 0 ? (
           <BellRing size={20} className="text-gold-400" />
@@ -51,7 +51,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 z-50 card border-pitch-600/40 overflow-hidden animate-slide-up shadow-xl">
+        <div className="absolute right-0 top-full mt-2 w-80 z-50 card !bg-pitch-900 border-pitch-600/60 overflow-hidden animate-slide-up shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-pitch-700/40">
             <span className="text-white font-medium text-sm">Notificaciones</span>
             <button onClick={() => setOpen(false)}>

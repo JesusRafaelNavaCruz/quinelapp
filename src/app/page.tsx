@@ -29,7 +29,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between pt-6 pb-4 animate-fade-in">
+      <div className="relative z-10 flex items-center justify-between pt-6 pb-4 animate-fade-in">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-pitch-500/20 rounded-full flex items-center justify-center text-xl">
             {user.avatar ?? user.name[0].toUpperCase()}

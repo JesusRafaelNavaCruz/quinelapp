@@ -9,6 +9,7 @@ import {
   saveChampionPrediction,
   getChampionPrediction,
   getUserGroups,
+  getUser,
 } from "@/lib/db";
 import type { Match, Prediction, ChampionPrediction, Group, User } from "@/types";
 import { ChevronLeft, Trophy, Lock, ChevronDown } from "lucide-react";
@@ -53,18 +54,18 @@ function MatchCard({
   onSave: (pred: Partial<Prediction>) => void;
   locked: boolean;
 }) {
-  const [homeScore, setHomeScore] = useState(prediction?.predictedHomeScore ?? 0);
-  const [awayScore, setAwayScore] = useState(prediction?.predictedAwayScore ?? 0);
+  const [homeScore, setHomeScore] = useState<number | "">(prediction?.predictedHomeScore ?? 0);
+  const [awayScore, setAwayScore] = useState<number | "">(prediction?.predictedAwayScore ?? 0);
   const [winner, setWinner] = useState<"home" | "draw" | "away">(
     prediction?.winner ?? (homeScore > awayScore ? "home" : homeScore < awayScore ? "away" : "draw")
   );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Sincroniza winner automáticamente con los scores
-  function updateScore(side: "home" | "away", val: number) {
-    const h = side === "home" ? val : homeScore;
-    const a = side === "away" ? val : awayScore;
+  function updateScore(side: "home" | "away", raw: string) {
+    const val = raw === "" ? "" : Math.max(0, parseInt(raw) || 0);
+    const h = side === "home" ? (val === "" ? 0 : val) : (homeScore === "" ? 0 : homeScore);
+    const a = side === "away" ? (val === "" ? 0 : val) : (awayScore === "" ? 0 : awayScore);
     if (side === "home") setHomeScore(val); else setAwayScore(val);
     const w = h > a ? "home" : h < a ? "away" : "draw";
     setWinner(w);
@@ -73,7 +74,11 @@ function MatchCard({
 
   async function handleSave() {
     setSaving(true);
-    await onSave({ predictedHomeScore: homeScore, predictedAwayScore: awayScore, winner });
+    const h = homeScore === "" ? 0 : homeScore;
+    const a = awayScore === "" ? 0 : awayScore;
+    await onSave({ predictedHomeScore: h, predictedAwayScore: a, winner });
+    setHomeScore(h);
+    setAwayScore(a);
     setDirty(false);
     setSaving(false);
   }
@@ -126,7 +131,8 @@ function MatchCard({
                 type="number"
                 min={0} max={20}
                 value={homeScore}
-                onChange={(e) => updateScore("home", Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={(e) => updateScore("home", e.target.value)}
+                onFocus={(e) => e.target.select()}
                 className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
               />
               <span className="text-pitch-500 font-display text-xl">-</span>
@@ -134,7 +140,8 @@ function MatchCard({
                 type="number"
                 min={0} max={20}
                 value={awayScore}
-                onChange={(e) => updateScore("away", Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={(e) => updateScore("away", e.target.value)}
+                onFocus={(e) => e.target.select()}
                 className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
               />
             </div>
@@ -180,7 +187,7 @@ function MatchCard({
 
       {/* Pronóstico guardado */}
       {!dirty && prediction && !locked && !hasResult && (
-        <p className="text-pitch-500 text-xs text-center">✓ Pronóstico guardado</p>
+        <p className="text-white text-xs text-center mt-2">✓ Pronóstico guardado</p>
       )}
     </div>
   );
@@ -199,7 +206,10 @@ function PronosticosPageContent() {
   const [champion, setChampion] = useState<ChampionPrediction | null>(null);
   const [championTeam, setChampionTeam] = useState("");
   const [activePhase, setActivePhase] = useState("grupos");
+  const [activeGroupLetter, setActiveGroupLetter] = useState("A");
   const [showGroupSelect, setShowGroupSelect] = useState(false);
+  const [predictionsLoading, setPredictionsLoading] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<User[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) { router.replace("/login"); return; }
@@ -216,17 +226,28 @@ function PronosticosPageContent() {
   useEffect(() => {
     if (!selectedGroupId || !user || authLoading) return;
 
-    const unsub = subscribePredictions(user.id, selectedGroupId, setPredictions);
+    setPredictionsLoading(true);
+    const unsub = subscribePredictions(user.id, selectedGroupId, (preds) => {
+      setPredictions(preds);
+      setPredictionsLoading(false);
+    });
 
-    // Recargar campeón siempre que cambie el grupo activo
     setChampion(null);
     setChampionTeam("");
     getChampionPrediction(user.id, selectedGroupId).then((c) => {
       if (c) { setChampion(c); setChampionTeam(c.teamName); }
     });
 
+    // Cargar miembros del grupo
+    const currentGroup = groups.find((g) => g.id === selectedGroupId);
+    if (currentGroup) {
+      Promise.all(currentGroup.members.map((id) => getUser(id))).then((users) => {
+        setGroupMembers(users.filter(Boolean) as User[]);
+      });
+    }
+
     return unsub;
-  }, [selectedGroupId, user]);
+  }, [selectedGroupId, user, groups]);
 
   const predictionMap = Object.fromEntries(predictions.map((p) => [p.matchId, p]));
 
@@ -267,7 +288,14 @@ function PronosticosPageContent() {
   }
 
   const phases = [...new Set(matches.map((m) => m.phase))];
-  const filteredMatches = matches.filter((m) => m.phase === activePhase);
+  const groupLetters = activePhase === "grupos"
+    ? [...new Set(matches.filter((m) => m.phase === "grupos" && m.group).map((m) => m.group!))].sort()
+    : [];
+  const filteredMatches = matches.filter((m) => {
+    if (m.phase !== activePhase) return false;
+    if (activePhase === "grupos" && m.group !== activeGroupLetter) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto">
@@ -311,6 +339,30 @@ function PronosticosPageContent() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Miembros del grupo */}
+      {groupMembers.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {groupMembers.map((member) => (
+              <div key={member.id} className="flex flex-col items-center gap-1 flex-shrink-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium border-2 ${
+                  member.id === user?.id
+                    ? "border-pitch-400 bg-pitch-500/30 text-white"
+                    : "border-pitch-700/60 bg-pitch-800/60 text-pitch-300"
+                }`}>
+                  {member.avatar ?? member.name[0].toUpperCase()}
+                </div>
+                <span className={`text-xs max-w-[52px] truncate text-center leading-none ${
+                  member.id === user?.id ? "text-pitch-300" : "text-pitch-500"
+                }`}>
+                  {member.id === user?.id ? "Tú" : member.name.split(" ")[0]}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -360,7 +412,7 @@ function PronosticosPageContent() {
           </div>
 
           {/* Tabs de fase */}
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide">
             {phases.map((phase) => (
               <button
                 key={phase}
@@ -376,26 +428,70 @@ function PronosticosPageContent() {
             ))}
           </div>
 
+          {/* Sub-filtro de grupo (solo en fase de grupos) */}
+          {groupLetters.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+              {groupLetters.map((letter) => (
+                <button
+                  key={letter}
+                  onClick={() => setActiveGroupLetter(letter)}
+                  className={`flex-shrink-0 w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                    activeGroupLetter === letter
+                      ? "bg-pitch-500 text-white"
+                      : "bg-pitch-800/60 text-pitch-400 hover:text-white"
+                  }`}
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Partidos */}
-          <div className="space-y-3">
-            {filteredMatches.map((match) => {
-              const locked = Date.now() >= match.date || match.status !== "upcoming";
-              return (
-                <MatchCard
-                  key={match.id}
-                  match={match}
-                  prediction={predictionMap[match.id]}
-                  locked={locked}
-                  onSave={(partial) => handleSavePrediction(match, partial)}
-                />
-              );
-            })}
-            {filteredMatches.length === 0 && (
-              <div className="card p-8 text-center">
-                <p className="text-pitch-400">No hay partidos en esta fase todavía.</p>
-              </div>
-            )}
-          </div>
+          {predictionsLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="card p-4 animate-pulse">
+                  <div className="h-3 bg-pitch-700 rounded w-32 mb-3" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-10 h-7 bg-pitch-700 rounded" />
+                      <div className="h-3 bg-pitch-700 rounded w-16 mt-1" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-12 h-12 bg-pitch-700 rounded-xl" />
+                      <div className="w-4 h-12 bg-pitch-800 rounded" />
+                      <div className="w-12 h-12 bg-pitch-700 rounded-xl" />
+                    </div>
+                    <div className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-10 h-7 bg-pitch-700 rounded" />
+                      <div className="h-3 bg-pitch-700 rounded w-16 mt-1" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredMatches.map((match) => {
+                const locked = Date.now() >= match.date || match.status !== "upcoming";
+                return (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    prediction={predictionMap[match.id]}
+                    locked={locked}
+                    onSave={(partial) => handleSavePrediction(match, partial)}
+                  />
+                );
+              })}
+              {filteredMatches.length === 0 && (
+                <div className="card p-8 text-center">
+                  <p className="text-pitch-400">No hay partidos en esta fase todavía.</p>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
