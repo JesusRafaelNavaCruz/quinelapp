@@ -120,10 +120,10 @@ function MatchCard({
               <span className="font-display text-3xl text-white">{match.awayScore}</span>
             </div>
           ) : locked ? (
-            <div className="flex items-center gap-1 opacity-60">
-              <span className="font-display text-2xl text-pitch-300">{homeScore}</span>
-              <span className="font-display text-xl text-pitch-500">-</span>
-              <span className="font-display text-2xl text-pitch-300">{awayScore}</span>
+            <div className="flex items-center gap-1 opacity-30">
+              <span className="font-display text-2xl text-pitch-400">?</span>
+              <span className="font-display text-xl text-pitch-600">-</span>
+              <span className="font-display text-2xl text-pitch-400">?</span>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -185,9 +185,33 @@ function MatchCard({
         </div>
       )}
 
-      {/* Pronóstico guardado */}
+      {/* Pronóstico guardado (partidos aún editables) */}
       {!dirty && prediction && !locked && !hasResult && (
-        <p className="text-white text-xs text-center mt-2">✓ Pronóstico guardado</p>
+        <p className="text-pitch-500 text-xs text-center mt-2">✓ Pronóstico guardado</p>
+      )}
+
+      {/* Tu pronóstico (partidos bloqueados o con resultado) */}
+      {locked && prediction && (
+        <div className="mt-3 pt-2 border-t border-pitch-700/30 flex items-center justify-center gap-1.5">
+          <span className="text-pitch-500 text-xs">Tu pronóstico:</span>
+          <span className={`text-xs font-semibold tracking-wide ${
+            pts === 3 ? "text-green-400" :
+            pts === 1 ? "text-gold-400" :
+            pts === 0 ? "text-pitch-600" :
+            "text-pitch-300"
+          }`}>
+            {prediction.predictedHomeScore} – {prediction.predictedAwayScore}
+          </span>
+          {pts !== undefined && (
+            <span className={`text-xs ${
+              pts === 3 ? "text-green-500" :
+              pts === 1 ? "text-gold-500" :
+              "text-pitch-600"
+            }`}>
+              {pts === 3 ? "✓ Exacto" : pts === 1 ? "✓ Ganador" : "✗"}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
