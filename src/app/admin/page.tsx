@@ -1,20 +1,24 @@
 "use client";
 import { useState, useEffect } from "react";
-import { subscribeMatches } from "@/lib/db";
-import type { Match } from "@/types";
+import { subscribeMatches, getPredictionsForMatch, getUsersByIds } from "@/lib/db";
+import type { Match, Prediction, User } from "@/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Shield } from "lucide-react";
+import { Shield, ChevronDown } from "lucide-react";
 
 const PHASE_LABELS: Record<string, string> = {
   grupos: "Grupos", octavos: "Octavos", cuartos: "Cuartos",
   semis: "Semis", tercer: "3er lugar", final: "Final",
 };
 
+type PredBreakdown = { preds: Prediction[]; users: Record<string, User> };
+
 export default function AdminPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [updating, setUpdating] = useState<string | null>(null);
   const [scores, setScores] = useState<Record<string, { home: string; away: string }>>({});
+  const [expandedMatch, setExpandedMatch] = useState<string | null>(null);
+  const [predData, setPredData] = useState<Record<string, PredBreakdown | "loading">>({});
 
   useEffect(() => {
     return subscribeMatches(setMatches);
@@ -52,6 +56,22 @@ export default function AdminPage() {
       alert("❌ Error al guardar el resultado");
     }
     setUpdating(null);
+  }
+
+  async function toggleMatch(matchId: string) {
+    if (expandedMatch === matchId) {
+      setExpandedMatch(null);
+      return;
+    }
+    setExpandedMatch(matchId);
+    if (matchId in predData) return;
+
+    setPredData((prev) => ({ ...prev, [matchId]: "loading" }));
+    const preds = await getPredictionsForMatch(matchId);
+    preds.sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+    const userIds = [...new Set(preds.map((p) => p.userId))];
+    const users = await getUsersByIds(userIds);
+    setPredData((prev) => ({ ...prev, [matchId]: { preds, users } }));
   }
 
   const finishedMatches = matches.filter((m) => m.status === "finished");
@@ -129,18 +149,73 @@ export default function AdminPage() {
           <div>
             <h2 className="font-display text-xl text-pitch-300 tracking-wide mb-3">RESULTADOS GUARDADOS</h2>
             <div className="space-y-2">
-              {finishedMatches.map((match) => (
-                <div key={match.id} className="card p-4 opacity-70">
-                  <div className="flex items-center gap-4">
-                    <span className="flex-1 text-pitch-300">{match.homeTeam}</span>
-                    <span className="font-display text-2xl text-white">
-                      {match.homeScore} - {match.awayScore}
-                    </span>
-                    <span className="flex-1 text-pitch-300 text-right">{match.awayTeam}</span>
-                    <span className="text-pitch-500 text-xs">✓</span>
+              {finishedMatches.map((match) => {
+                const expanded = expandedMatch === match.id;
+                const data = predData[match.id];
+                return (
+                  <div key={match.id} className="card overflow-hidden">
+                    <button
+                      onClick={() => toggleMatch(match.id)}
+                      className="w-full p-4 flex items-center gap-4 text-left hover:bg-pitch-800/30 transition-colors"
+                    >
+                      <span className="flex-1 text-pitch-300 text-sm">{match.homeTeam}</span>
+                      <span className="font-display text-2xl text-white">
+                        {match.homeScore} - {match.awayScore}
+                      </span>
+                      <span className="flex-1 text-pitch-300 text-sm text-right">{match.awayTeam}</span>
+                      <ChevronDown
+                        size={16}
+                        className={`text-pitch-500 transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {expanded && (
+                      <div className="border-t border-pitch-800/60 px-4 pb-4 pt-3">
+                        {data === "loading" && (
+                          <div className="flex justify-center py-3">
+                            <div className="w-5 h-5 border-2 border-pitch-500 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                        {data && data !== "loading" && data.preds.length === 0 && (
+                          <p className="text-pitch-500 text-sm text-center py-2">
+                            Nadie pronosticó este partido
+                          </p>
+                        )}
+                        {data && data !== "loading" && data.preds.length > 0 && (
+                          <div className="space-y-2">
+                            {data.preds.map((pred) => {
+                              const user = data.users[pred.userId];
+                              const pts = pred.points ?? 0;
+                              return (
+                                <div key={pred.id} className="flex items-center gap-3">
+                                  <span className="text-lg w-7 text-center flex-shrink-0">
+                                    {user?.avatar ?? "⚽"}
+                                  </span>
+                                  <span className="flex-1 text-white text-sm truncate">
+                                    {user?.name ?? "Desconocido"}
+                                  </span>
+                                  <span className="text-pitch-400 text-sm font-display tabular-nums">
+                                    {pred.predictedHomeScore} - {pred.predictedAwayScore}
+                                  </span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                                    pts === 3
+                                      ? "bg-green-500/20 text-green-400"
+                                      : pts === 1
+                                      ? "bg-yellow-500/20 text-yellow-400"
+                                      : "bg-pitch-800 text-pitch-500"
+                                  }`}>
+                                    {pts === 3 ? "✓✓ 3 pts" : pts === 1 ? "✓ 1 pt" : "0 pts"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

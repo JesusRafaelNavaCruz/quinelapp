@@ -1,4 +1,4 @@
-# Quiniela Mundial 2026
+# Cancha 26 — Quiniela Mundial 2026
 
 App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá). Permite crear grupos privados, pronosticar resultados partido a partido, competir en una tabla de posiciones en tiempo real y recibir notificaciones push cuando se actualizan resultados.
 
@@ -12,6 +12,7 @@ App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá)
 | Lenguaje | TypeScript |
 | Estilos | Tailwind CSS |
 | Base de datos | Cloud Firestore (Firebase) |
+| Autenticación | Firebase Authentication (Email/Contraseña + Google) |
 | Notificaciones push | Firebase Cloud Messaging (FCM) |
 | Fuentes | Bebas Neue (display) · DM Sans (body) via `next/font` |
 | Íconos | Lucide React |
@@ -20,6 +21,7 @@ App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá)
 
 ## Funcionalidades
 
+- **Autenticación** — registro e inicio de sesión con email/contraseña o cuenta Google
 - **Pronósticos por partido** — marcador exacto y ganador inferido automáticamente
 - **Pronóstico de campeón** del torneo (5 pts extra)
 - **Tabla de posiciones en tiempo real** por grupo (Firestore `onSnapshot`)
@@ -27,7 +29,6 @@ App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá)
 - **Link de invitación** para compartir el grupo (`/unirse/[id]`)
 - **Notificaciones push** (FCM) y **campana in-app** al actualizarse resultados
 - **Panel de administrador** en `/admin` para cargar resultados
-- **Sin login** — identidad basada en `nanoid` almacenada en `localStorage`
 
 ---
 
@@ -46,7 +47,8 @@ App web para gestionar una quiniela del Mundial 2026 (México · USA · Canadá)
 ```
 src/
 ├── app/
-│   ├── page.tsx               # Home — setup de nombre/avatar y menú principal
+│   ├── page.tsx               # Home — menú principal (requiere autenticación)
+│   ├── login/page.tsx         # Inicio de sesión y registro (email + Google)
 │   ├── grupos/page.tsx        # Crear y unirse a grupos, copiar link de invitación
 │   ├── pronosticos/page.tsx   # Pronosticar partidos por fase, elegir campeón
 │   ├── tabla/page.tsx         # Tabla de posiciones del grupo
@@ -56,16 +58,18 @@ src/
 │       ├── results/route.ts   # POST: registrar resultado + calcular puntos + notificar
 │       ├── notifications/     # POST: registrar token FCM del dispositivo
 │       └── seed/route.ts      # GET: poblar Firestore con los partidos del mundial
-├── lib/
-│   ├── firebase.ts            # Inicialización cliente Firebase (Client SDK)
-│   ├── firebase-admin.ts      # Inicialización Admin SDK (solo servidor)
-│   ├── db.ts                  # Helpers de lectura/escritura Firestore
-│   ├── user.ts                # Manejo de identidad por localStorage
-│   ├── useNotifications.ts    # Hook para solicitar permiso y registrar FCM token
-│   └── matches-data.ts        # Calendario completo del Mundial 2026
-├── types/index.ts             # Interfaces TypeScript de todos los modelos
-└── components/
-    └── NotificationBell.tsx   # Campana con badge de no leídas
+├── components/
+│   ├── Providers.tsx          # Wrapper del AuthProvider para el layout raíz
+│   └── NotificationBell.tsx   # Campana con badge de no leídas
+└── lib/
+    ├── AuthContext.tsx         # Contexto de autenticación Firebase (signIn/signUp/Google/signOut)
+    ├── firebase.ts             # Inicialización cliente Firebase (Client SDK)
+    ├── firebase-admin.ts       # Inicialización Admin SDK (solo servidor)
+    ├── db.ts                   # Helpers de lectura/escritura Firestore
+    ├── user.ts                 # Helpers de perfil de usuario
+    ├── useNotifications.ts     # Hook para solicitar permiso y registrar FCM token
+    ├── matches-data.ts         # Calendario completo del Mundial 2026
+    └── ../types/index.ts       # Interfaces TypeScript de todos los modelos
 ```
 
 ---
@@ -73,7 +77,7 @@ src/
 ## Modelo de datos (Firestore)
 
 ```
-users/              {id, name, avatar, fcmToken?, createdAt}
+users/              {id, name, email, avatar, fcmToken?, createdAt}
 groups/             {id, name, adminId, members[], createdAt}
 matches/            {id, homeTeam, awayTeam, homeCode, awayCode, date, phase, group?, homeScore?, awayScore?, status}
 predictions/        {id, userId, matchId, groupId, winner, predictedHomeScore, predictedAwayScore, points?, updatedAt}
@@ -96,13 +100,14 @@ notifications/      {id, userId, title, body, read, createdAt, type, relatedId?}
 
 ## Flujo principal
 
-1. **Usuario llega** → elige nombre y avatar emoji → se guarda en `localStorage` + Firestore
-2. **Crea un grupo** → obtiene código de 6 letras → comparte el link
-3. **Otros se unen** → con el código manual o abriendo el link de invitación
-4. **Todos pronostican** → marcador de cada partido (se bloquea automáticamente al iniciar)
-5. **Admin actualiza resultado** → desde `/admin` → llama a `POST /api/results`
-6. **Sistema calcula puntos** → actualiza standings en tiempo real
-7. **Notificaciones** → todos los miembros reciben push notification y alerta in-app
+1. **Usuario llega** → si no está autenticado, es redirigido a `/login`
+2. **Registro / Login** → con email y contraseña, o con Google
+3. **Crea un grupo** → obtiene código de 6 letras → comparte el link
+4. **Otros se unen** → con el código manual o abriendo el link de invitación
+5. **Todos pronostican** → marcador de cada partido (se bloquea automáticamente al iniciar)
+6. **Admin actualiza resultado** → desde `/admin` → llama a `POST /api/results`
+7. **Sistema calcula puntos** → actualiza standings en tiempo real
+8. **Notificaciones** → todos los miembros reciben push notification y alerta in-app
 
 ---
 
@@ -144,11 +149,17 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 SEED_SECRET=una-clave-secreta-larga
 ```
 
-### 3. Service Worker (notificaciones push)
+### 3. Habilitar Firebase Authentication
+
+En Firebase Console → Authentication → Sign-in method, habilita:
+- **Email/Password**
+- **Google** (configura el dominio autorizado en producción)
+
+### 4. Service Worker (notificaciones push)
 
 El archivo `public/firebase-messaging-sw.js` necesita las credenciales Firebase hardcodeadas porque los Service Workers no tienen acceso a variables de entorno. Edítalo con los mismos valores del Client SDK.
 
-### 4. Desplegar reglas e índices de Firestore
+### 5. Desplegar reglas e índices de Firestore
 
 ```bash
 npm install -g firebase-tools
@@ -156,7 +167,7 @@ firebase login
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-### 5. Poblar los partidos del mundial
+### 6. Poblar los partidos del mundial
 
 Una sola vez, con el servidor corriendo:
 
@@ -168,7 +179,7 @@ curl http://localhost:3000/api/seed
 curl "https://tu-dominio.com/api/seed?secret=TU_SEED_SECRET"
 ```
 
-### 6. Correr en desarrollo
+### 7. Correr en desarrollo
 
 ```bash
 npm run dev
@@ -189,7 +200,8 @@ Configura todas las variables de entorno en el dashboard del proveedor. La app e
 
 ## Notas de seguridad
 
-- Las Firestore Security Rules permiten lectura/escritura amplia por diseño — la app no usa Firebase Auth, el control se hace a nivel de lógica de aplicación.
-- El panel `/admin` no tiene protección de acceso. Se recomienda agregar autenticación antes de pasar a producción.
+- La autenticación usa **Firebase Authentication** — las identidades son gestionadas por Firebase, no por la aplicación.
+- El panel `/admin` no tiene protección de rol. Se recomienda agregar un check de `uid` autorizado antes de pasar a producción.
+- Las Firestore Security Rules deben actualizarse para validar `request.auth.uid` en escrituras sensibles.
 - El endpoint `/api/seed` está protegido por `SEED_SECRET` en producción.
 - Archivos excluidos de git por `.gitignore`: `.env.local`, `.env.dev`, `.env.prod` y el JSON de service account.

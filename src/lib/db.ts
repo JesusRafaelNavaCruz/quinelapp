@@ -104,6 +104,24 @@ export async function getGroupPredictionsForMatch(
   return snap.docs.map((d) => d.data() as Prediction);
 }
 
+export async function getPredictionsForMatch(matchId: string): Promise<Prediction[]> {
+  const q = query(collection(db, "predictions"), where("matchId", "==", matchId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as Prediction);
+}
+
+export async function getUsersByIds(userIds: string[]): Promise<Record<string, User>> {
+  if (userIds.length === 0) return {};
+  const results: Record<string, User> = {};
+  await Promise.all(
+    userIds.map(async (id) => {
+      const snap = await getDoc(doc(db, "users", id));
+      if (snap.exists()) results[id] = snap.data() as User;
+    })
+  );
+  return results;
+}
+
 export function subscribePredictions(
   userId: string,
   groupId: string,
