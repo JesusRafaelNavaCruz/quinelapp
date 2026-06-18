@@ -12,7 +12,7 @@ import {
   getUser,
 } from "@/lib/db";
 import type { Match, Prediction, ChampionPrediction, Group, User } from "@/types";
-import { ChevronLeft, Trophy, Lock, ChevronDown } from "lucide-react";
+import { ChevronLeft, Trophy, Lock, ChevronDown, Plus, Minus } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { WORLD_CUP_TEAMS } from "@/lib/matches-data";
@@ -63,13 +63,19 @@ function MatchCard({
   const [saving, setSaving] = useState(false);
 
   function updateScore(side: "home" | "away", raw: string) {
-    const val = raw === "" ? "" : Math.max(0, parseInt(raw) || 0);
+    const val = raw === "" ? "" : Math.min(20, Math.max(0, parseInt(raw) || 0));
     const h = side === "home" ? (val === "" ? 0 : val) : (homeScore === "" ? 0 : homeScore);
     const a = side === "away" ? (val === "" ? 0 : val) : (awayScore === "" ? 0 : awayScore);
     if (side === "home") setHomeScore(val); else setAwayScore(val);
     const w = h > a ? "home" : h < a ? "away" : "draw";
     setWinner(w);
     setDirty(true);
+  }
+
+  function adjustScore(side: "home" | "away", delta: number) {
+    const current = side === "home" ? homeScore : awayScore;
+    const next = Math.min(20, Math.max(0, (current === "" ? 0 : current) + delta));
+    updateScore(side, String(next));
   }
 
   async function handleSave() {
@@ -127,23 +133,59 @@ function MatchCard({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0} max={20}
-                value={homeScore}
-                onChange={(e) => updateScore("home", e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
-              />
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => adjustScore("home", 1)}
+                  className="w-7 h-6 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                  aria-label={`Aumentar goles de ${match.homeTeam}`}
+                >
+                  <Plus size={14} />
+                </button>
+                <input
+                  type="number"
+                  min={0} max={20}
+                  value={homeScore}
+                  onChange={(e) => updateScore("home", e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => adjustScore("home", -1)}
+                  className="w-7 h-6 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                  aria-label={`Disminuir goles de ${match.homeTeam}`}
+                >
+                  <Minus size={14} />
+                </button>
+              </div>
               <span className="text-pitch-500 font-display text-xl">-</span>
-              <input
-                type="number"
-                min={0} max={20}
-                value={awayScore}
-                onChange={(e) => updateScore("away", e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
-              />
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => adjustScore("away", 1)}
+                  className="w-7 h-6 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                  aria-label={`Aumentar goles de ${match.awayTeam}`}
+                >
+                  <Plus size={14} />
+                </button>
+                <input
+                  type="number"
+                  min={0} max={20}
+                  value={awayScore}
+                  onChange={(e) => updateScore("away", e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  className="w-12 h-12 bg-pitch-800 border border-pitch-600/40 rounded-xl text-white font-display text-2xl text-center focus:outline-none focus:border-pitch-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => adjustScore("away", -1)}
+                  className="w-7 h-6 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                  aria-label={`Disminuir goles de ${match.awayTeam}`}
+                >
+                  <Minus size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -230,7 +272,7 @@ function PronosticosPageContent() {
   const [champion, setChampion] = useState<ChampionPrediction | null>(null);
   const [championTeam, setChampionTeam] = useState("");
   const [activePhase, setActivePhase] = useState("grupos");
-  const [activeGroupLetter, setActiveGroupLetter] = useState("A");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "porJugar" | "pendiente" | "finalizado">("todos");
   const [showGroupSelect, setShowGroupSelect] = useState(false);
   const [predictionsLoading, setPredictionsLoading] = useState(false);
   const [groupMembers, setGroupMembers] = useState<User[]>([]);
@@ -312,12 +354,17 @@ function PronosticosPageContent() {
   }
 
   const phases = [...new Set(matches.map((m) => m.phase))];
-  const groupLetters = activePhase === "grupos"
-    ? [...new Set(matches.filter((m) => m.phase === "grupos" && m.group).map((m) => m.group!))].sort()
-    : [];
   const filteredMatches = matches.filter((m) => {
     if (m.phase !== activePhase) return false;
-    if (activePhase === "grupos" && m.group !== activeGroupLetter) return false;
+
+    const locked = Date.now() >= m.date || m.status !== "upcoming";
+    const hasResult = m.homeScore !== undefined;
+    const hasPrediction = !!predictionMap[m.id];
+
+    if (statusFilter === "porJugar" && (locked || hasResult)) return false;
+    if (statusFilter === "pendiente" && (locked || hasPrediction)) return false;
+    if (statusFilter === "finalizado" && !hasResult) return false;
+
     return true;
   });
 
@@ -452,24 +499,27 @@ function PronosticosPageContent() {
             ))}
           </div>
 
-          {/* Sub-filtro de grupo (solo en fase de grupos) */}
-          {groupLetters.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-              {groupLetters.map((letter) => (
-                <button
-                  key={letter}
-                  onClick={() => setActiveGroupLetter(letter)}
-                  className={`flex-shrink-0 w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                    activeGroupLetter === letter
-                      ? "bg-pitch-500 text-white"
-                      : "bg-pitch-800/60 text-pitch-400 hover:text-white"
-                  }`}
-                >
-                  {letter}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Filtro de estado */}
+          <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+            {([
+              { key: "todos", label: "Todos" },
+              { key: "porJugar", label: "Por jugar" },
+              { key: "pendiente", label: "Pendiente pronóstico" },
+              { key: "finalizado", label: "Finalizado" },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                  statusFilter === key
+                    ? "bg-pitch-500 text-white"
+                    : "bg-pitch-800/60 text-pitch-400 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           {/* Partidos */}
           {predictionsLoading ? (

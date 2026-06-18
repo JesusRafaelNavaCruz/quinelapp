@@ -4,7 +4,7 @@ import { subscribeMatches, getPredictionsForMatch, getUsersByIds } from "@/lib/d
 import type { Match, Prediction, User } from "@/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Shield, ChevronDown } from "lucide-react";
+import { Shield, ChevronDown, Plus, Minus } from "lucide-react";
 
 const PHASE_LABELS: Record<string, string> = {
   grupos: "Grupos", octavos: "Octavos", cuartos: "Cuartos",
@@ -29,6 +29,12 @@ export default function AdminPage() {
       ...prev,
       [matchId]: { ...prev[matchId], [side]: val },
     }));
+  }
+
+  function adjustScore(matchId: string, side: "home" | "away", delta: number) {
+    const current = parseInt(scores[matchId]?.[side] ?? "0") || 0;
+    const next = Math.min(20, Math.max(0, current + delta));
+    setScore(matchId, side, String(next));
   }
 
   async function handleUpdate(match: Match) {
@@ -111,21 +117,57 @@ export default function AdminPage() {
                   <div className="flex items-center gap-4">
                     <span className="flex-1 text-white font-medium">{match.homeTeam}</span>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="number" min={0} max={20}
-                        value={s.home}
-                        onChange={(e) => setScore(match.id, "home", e.target.value)}
-                        placeholder="0"
-                        className="w-14 bg-pitch-800 border border-pitch-600/40 rounded-lg px-2 py-2 text-white font-display text-xl text-center focus:outline-none focus:border-pitch-400"
-                      />
+                      <div className="flex flex-col items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => adjustScore(match.id, "home", 1)}
+                          className="w-6 h-5 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                          aria-label={`Aumentar goles de ${match.homeTeam}`}
+                        >
+                          <Plus size={12} />
+                        </button>
+                        <input
+                          type="number" min={0} max={20}
+                          value={s.home}
+                          onChange={(e) => setScore(match.id, "home", e.target.value)}
+                          placeholder="0"
+                          className="w-14 bg-pitch-800 border border-pitch-600/40 rounded-lg px-2 py-2 text-white font-display text-xl text-center focus:outline-none focus:border-pitch-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => adjustScore(match.id, "home", -1)}
+                          className="w-6 h-5 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                          aria-label={`Disminuir goles de ${match.homeTeam}`}
+                        >
+                          <Minus size={12} />
+                        </button>
+                      </div>
                       <span className="text-pitch-500 font-display">-</span>
-                      <input
-                        type="number" min={0} max={20}
-                        value={s.away}
-                        onChange={(e) => setScore(match.id, "away", e.target.value)}
-                        placeholder="0"
-                        className="w-14 bg-pitch-800 border border-pitch-600/40 rounded-lg px-2 py-2 text-white font-display text-xl text-center focus:outline-none focus:border-pitch-400"
-                      />
+                      <div className="flex flex-col items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => adjustScore(match.id, "away", 1)}
+                          className="w-6 h-5 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                          aria-label={`Aumentar goles de ${match.awayTeam}`}
+                        >
+                          <Plus size={12} />
+                        </button>
+                        <input
+                          type="number" min={0} max={20}
+                          value={s.away}
+                          onChange={(e) => setScore(match.id, "away", e.target.value)}
+                          placeholder="0"
+                          className="w-14 bg-pitch-800 border border-pitch-600/40 rounded-lg px-2 py-2 text-white font-display text-xl text-center focus:outline-none focus:border-pitch-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => adjustScore(match.id, "away", -1)}
+                          className="w-6 h-5 flex items-center justify-center rounded-md bg-pitch-800/60 text-pitch-400 hover:bg-pitch-700/60 hover:text-white transition-colors"
+                          aria-label={`Disminuir goles de ${match.awayTeam}`}
+                        >
+                          <Minus size={12} />
+                        </button>
+                      </div>
                     </div>
                     <span className="flex-1 text-white font-medium text-right">{match.awayTeam}</span>
                     <button
